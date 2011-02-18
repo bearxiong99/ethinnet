@@ -1,0 +1,124 @@
+/**
+\addtogroup sys
+@{
+*/
+	
+/**
+\defgroup pt Protothreads 
+
+Protothreads are a type of lightweight stackless threads designed for
+severly memory constrained systems such as deeply embedded systems or
+sensor network nodes. Protothreads provides linear code execution for
+event-driven systems implemented in C. Protothreads can be used with
+or without an RTOS.
+
+Protothreads are a extremely lightweight, stackless type of threads
+that provides a blocking context on top of an event-driven system,
+without the overhead of per-thread stacks. The purpose of protothreads
+is to implement sequential flow of control without complex state
+machines or full multi-threading. Protothreads provides conditional
+blocking inside C functions.
+
+protothreads和纯粹的事件驱动方法相比，优势在于虽然提供的是一个顺序的代码，
+却提供了阻塞的功能。在纯事件驱动的系统中, 阻塞必须由手动来执行，把函数
+分成两个部分- 一部分是阻塞之前执行的，另一部分是阻塞之后执行的.这就带来
+一个问题，很难使用例如if条件和while循环之类的控制结构。
+
+相比传统的线程的优势在于protothread不需要一个独立的栈.在内存受限制的系统中, 分配多个堆栈的开销消耗了大量的内存。
+相反，每个protothread需要的内存大小为状态的两个字节到12个字节之间，具体的依赖于架构。
+
+注意： 因为protothreads在使用阻塞的时候不会存储堆栈的上下文, 当protothread被阻塞的时候局部变量不会被保存 . 
+这就意味着局部变量应该最大限度的忽略 
+- 如果担心的话, 就别在一个protothread中使用具局部变量。
+
+
+主要特性:
+
+    - 没有设备相关的代码 - protothreads库是纯C编写的
+
+    - 不要使用容易出错的函数，例如 longjmp()
+        
+    - 非常小的内存消耗 - 每个protothread只占两个字节
+    
+    - 可以使用或者不使用操作系统
+    
+    - 提供挂起等待的功能的同时不需要多线程或堆栈的切换
+
+应用实例:
+
+    - 内存受限制的系统
+    
+    - 事件驱动的协议栈
+    
+    - 深度精简的嵌入式系统
+    
+    - 传感网络节点
+
+	protothreads的API有四个基本的操作组成:
+			初始化	: PT_INIT(), 
+			执行	: PT_BEGIN(), 
+			条件挂起: PT_WAIT_UNTIL() 
+			退出	: PT_END(). 
+	在这些操作的上, 建立了两个方便的函数: 
+			保留条件挂起:PT_WAIT_WHILE() 
+			protothread挂起: PT_WAIT_THREAD()
+
+\sa \ref pt "Protothreads API文档"
+    
+
+
+	在内存受限制的系统中，例如深度精简的嵌入式系统中，传统的 多线程消耗了太多的内存.在传统的多线程的操作系统中,每个线程都必须有他自己的堆栈, 这就是典型的过度配置.这些堆栈可能使用了可用内存的绝大部分。
+
+	与传统的线程相比，protothreads最重要的优点就是protothreads
+是非常的轻量化的: 一个protothread是不需要自己的堆栈的.而且,所有的
+protothreads都会在一个堆栈上运行，并且上下文的切换是由堆栈的回放
+（stack rewinding）来实现的. 每个protothread只需要内存的两个字节. 此外,
+ protothreads使用纯C来编写的，因此它的移植性很好。
+
+	一个protothread只能在一个C函数上运行而不能跨越到其他的函数上，一个protothread可以调用正常的C函数，但是不能阻塞这个函数. 
+可以通过产生一个新的子线程来实现阻塞内部的调用的函数这个功能. 这种方法的优点是阻塞简洁明了: 这样程序员就可以清楚的知道哪一个函数可以阻塞，哪些函数永远不会阻塞。
+
+Protothreads和不对称的合作例程（asymmetric co-routines）很类似。两者最主要的区别是合作例程为每一个合作例程都独立的分配了堆栈, 然而， protothreads是不需要堆栈的. 
+
+\章节一 pt-autovars 局部变量
+
+\注意
+ 因为protothreads在使用阻塞的时候不会存储堆栈的上下文, 
+当protothread被阻塞的时候局部变量不会被保存 . 
+这就意味着局部变量应该最大限度的忽略。 
+- 如果担心的话, 就别在一个protothread中使用具局部变量。
+
+\章节二 pt-scheduling 调度
+
+A protothread is driven by repeated calls to the function in which the
+protothread is running. Each time the function is called, the
+protothread will run until it blocks or exits. Thus the scheduling of
+protothreads is done by the application that uses protothreads.
+
+\章节三 pt-impl 执行
+
+Protothreads are implemented using \ref lc "local continuations". A
+local continuation represents the current state of execution at a
+particular place in the program, but does not provide any call history
+or local variables. A local continuation can be set in a specific
+function to capture the state of the function. After a local
+continuation has been set can be resumed in order to restore the state
+of the function at the point where the local continuation was set.
+
+
+Local continuations可以由多种方法实现：
+
+   -# 通过使用机器相关的汇编代码,
+   -# 通过使用标准的C结构
+   -# 通过编译器的扩展. 
+
+	第一种方法是通过保存处理器的状态来实现的,
+除了堆栈指针, 每一个protothread还需要16到32个字节的内存容量. 
+具体的内存需求依赖于具体的架构。
+
+每个protothread的标准C执行只需要两个字节的内存，这就是因为利用了C
+ switch()语句不明显的特性. 然而，这种执行方式在代码不能使用
+switch()语句的protothreads中施加轻微的限制。
+
+	某些编译器扩展了C语言的特性，可以使得C语言执行protothreads. 
+	GCC支持label指针，这个特性可以使得C语言能够执行protothreads. 这样执行程序的话, 每个protothreads需要4字节的内存.
